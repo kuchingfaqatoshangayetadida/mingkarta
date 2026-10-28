@@ -1,3 +1,4 @@
+import http from 'http';
 import { WebSocketServer } from 'ws';
 import * as g from '../src/game/game.js';
 import { EM } from '../src/game/emojis.js';
@@ -5,12 +6,60 @@ import { EM } from '../src/game/emojis.js';
 const CHARS = ['yigit', 'qiz', 'chol', 'bola', 'mushuk', 'ayiq', 'quyon', 'tulki'];
 const EMO = ['laugh', 'cry', 'wink', 'heart'];
 
-export function setupWebSocketServer(target) {
-  const options = typeof target === 'number' ? { port: target } : { server: target };
-  const wss = new WebSocketServer(options);
+let runningDevServer = null;
 
-  wss.on('error', (err) => {
-    console.warn('WSS server error (ignored):', err.message);
+export function setupWebSocketServer(target = 3001) {
+  let server;
+  const isHttpServer = typeof target === 'object' && target !== null;
+
+  if (isHttpServer) {
+    server = target;
+  } else {
+    if (runningDevServer) return runningDevServer;
+    server = http.createServer((req, res) => {
+      if (req.url === '/ice.json') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ iceServers: [] }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Game Server Ready');
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`Port ${target} band, avvalgi jarayon ishlamoqda.`);
+      } else {
+        console.warn('Server error:', err.message);
+      }
+    });
+
+    server.listen(target, () => {
+      console.log(`O‘yin dev serveri http://localhost:${target} da ishga tushdi`);
+    });
+
+    runningDevServer = server;
+  }
+
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request, socket, head) => {
+    socket.on('error', (err) => {
+      console.warn('Socket upgrade error:', err.message);
+    });
+
+    try {
+      const pathname = request.url.split('?')[0];
+      if (pathname === '/ws' || pathname === '/' || pathname === '') {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+      } else {
+        socket.destroy();
+      }
+    } catch (e) {
+      socket.destroy();
+    }
   });
 
   const rooms = {};
@@ -74,7 +123,7 @@ export function setupWebSocketServer(target) {
 
   wss.on('connection', (ws) => {
     ws.on('error', (e) => {
-      console.warn('WS socket error:', e.message);
+      console.warn('WS client error:', e.message);
     });
 
     ws.on('message', (raw) => {
@@ -178,7 +227,7 @@ export function setupWebSocketServer(target) {
         return;
       }
 
-      // O'yin yurishi (action)
+      // O'yin harakati (action)
       if (m.t === 'a' && ws.room) {
         const R = ws.room;
         if (!g.applyAct(R.G, ws.idx, m.n, m.a)) return;
@@ -213,5 +262,5 @@ export function setupWebSocketServer(target) {
     });
   });
 
-  return wss;
+  return server;
 }
