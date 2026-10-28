@@ -17,13 +17,24 @@ export function setupWebSocketServer(target = 3001) {
   } else {
     if (runningDevServer) return runningDevServer;
     server = http.createServer((req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       if (req.url === '/ice.json') {
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ iceServers: [] }));
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('Game Server Ready');
+
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Ming Karta Serveri Ishlamoqda');
     });
 
     server.on('error', (err) => {
@@ -42,6 +53,22 @@ export function setupWebSocketServer(target = 3001) {
   }
 
   const wss = new WebSocketServer({ noServer: true });
+
+  // Heartbeat to prevent Render from closing inactive WebSocket connections
+  const interval = setInterval(() => {
+    wss.clients.forEach(ws => {
+      if (ws.isAlive === false) {
+        try { ws.terminate(); } catch (e) {}
+        return;
+      }
+      ws.isAlive = false;
+      try { ws.ping(); } catch (e) {}
+    });
+  }, 25000);
+
+  wss.on('close', () => {
+    clearInterval(interval);
+  });
 
   server.on('upgrade', (request, socket, head) => {
     socket.on('error', (err) => {
@@ -86,6 +113,7 @@ export function setupWebSocketServer(target = 3001) {
   };
 
   function bc(R) {
+    if (!R || !R.socks) return;
     R.socks.forEach((s, i) => {
       try {
         if (s && s.readyState === 1) s.send(JSON.stringify({ t: 'state', G: R.G, me: i }));
@@ -96,32 +124,39 @@ export function setupWebSocketServer(target = 3001) {
   function after(R) {
     clearTimeout(R.timer);
     const G = R.G;
+    if (!G) return;
     if (G.phase === 'col') {
       R.timer = setTimeout(() => {
-        if (G.phase !== 'col') return;
-        g.colA(G);
-        G.v++;
+        if (!R.G || R.G.phase !== 'col') return;
+        g.colA(R.G);
+        R.G.v++;
         bc(R);
         after(R);
       }, 1400);
     } else if (G.phase === 'tal') {
       R.timer = setTimeout(() => {
-        if (G.phase !== 'tal') return;
-        g.talA(G);
-        G.v++;
+        if (!R.G || R.G.phase !== 'tal') return;
+        g.talA(R.G);
+        R.G.v++;
         bc(R);
       }, 3500);
     } else if (G.phase === 'end') {
       R.timer = setTimeout(() => {
-        if (G.phase !== 'end') return;
-        g.newRound(G);
-        G.v++;
+        if (!R.G || R.G.phase !== 'end') return;
+        g.newRound(R.G);
+        R.G.v++;
         bc(R);
       }, 5000);
     }
   }
 
   wss.on('connection', (ws) => {
+    ws.isAlive = true;
+
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
     ws.on('error', (e) => {
       console.warn('WS client error:', e.message);
     });
@@ -131,6 +166,13 @@ export function setupWebSocketServer(target = 3001) {
       try {
         m = JSON.parse(raw);
       } catch (e) {
+        return;
+      }
+
+      // Heartbeat ping
+      if (m.t === 'ping') {
+        ws.isAlive = true;
+        try { ws.send(JSON.stringify({ t: 'pong' })); } catch (e) {}
         return;
       }
 
@@ -154,7 +196,7 @@ export function setupWebSocketServer(target = 3001) {
       // JOIN: ochiq komandalar ro'yxati
       if (m.t === 'list') {
         const list = Object.values(rooms)
-          .filter(R => R.G.phase === 'lobby' && R.socks[0] && R.socks[0].readyState === 1 && R.G.players.length < R.G.max)
+          .filter(R => R.G && R.G.phase === 'lobby' && R.socks[0] && R.socks[0].readyState === 1 && R.G.players.length < R.G.max)
           .map(R => ({ code: R.G.code, team: R.G.team, host: R.G.players[0].name, n: R.G.players.length, max: R.G.max }));
         try {
           if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'rooms', rooms: list }));
@@ -189,7 +231,7 @@ export function setupWebSocketServer(target = 3001) {
       // Smaylik / reaksiya
       if (m.t === 'emo' && ws.room && ((Number.isInteger(m.e) && m.e >= 0 && m.e < EM.length) || EMO.includes(m.e))) {
         const now = Date.now();
-        if (now - (ws.lastEmo || 0) < 350) return;
+        if (now - (ws.lastEmo || 0) < 250) return;
         ws.lastEmo = now;
         const R = ws.room;
         R.socks.forEach(s => {
@@ -241,7 +283,7 @@ export function setupWebSocketServer(target = 3001) {
       const R = ws.room;
       if (!R) return;
       if (R.socks[ws.idx] === ws) R.socks[ws.idx] = null;
-      if (R.G.phase === 'lobby' && ws.idx > 0 && !R.socks[ws.idx]) {
+      if (R.G && R.G.phase === 'lobby' && ws.idx > 0 && !R.socks[ws.idx]) {
         R.pids.splice(ws.idx, 1);
         R.socks.splice(ws.idx, 1);
         R.G.players.splice(ws.idx, 1);

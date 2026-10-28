@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 
-// Personajlar: Three.js, belidan yuqori qism, 3D animatsiya
+// Personajlar: Three.js, belidan yuqori qism, yuqori sifatli 3D modellar va silliq animatsiya
 export const CHARS = [
-  { id: 'yigit', n: 'Yigit', ic: '🧑', k: 'h', skin: '#f0c29a', hair: '#2a1a10', st: 'short', shirt: '#2f6fd6' },
-  { id: 'qiz', n: 'Qiz', ic: '👩', k: 'h', skin: '#f6d3b3', hair: '#1b1210', st: 'long', shirt: '#d6457f' },
-  { id: 'chol', n: 'Cholim', ic: '👴', k: 'h', skin: '#e6b78f', hair: '#e8e8e8', st: 'beard', hat: '#161616', shirt: '#2f8a58' },
-  { id: 'bola', n: 'Bola', ic: '🧒', k: 'h', skin: '#f3c9a0', hair: '#7a4a22', st: 'cap', cap: '#e05a2b', shirt: '#f0b429' },
-  { id: 'mushuk', n: 'Mushuk', ic: '🐱', k: 'a', fur: '#e8a24f', belly: '#fff1d9', ear: 'cone', shirt: '#7a4ad6' },
-  { id: 'ayiq', n: 'Ayiq', ic: '🐻', k: 'a', fur: '#8a5a3a', belly: '#d9b48f', ear: 'ball', shirt: '#d65a3a' },
-  { id: 'quyon', n: 'Quyon', ic: '🐰', k: 'a', fur: '#f1f1f1', belly: '#ffe3ec', ear: 'long', shirt: '#3aa6a6' },
-  { id: 'tulki', n: 'Tulki', ic: '🦊', k: 'a', fur: '#e0642a', belly: '#fff4e6', ear: 'cone', shirt: '#2a4a8a' }
+  { id: 'yigit', n: 'Yigit', ic: '🧑', k: 'h', skin: '#f4c8a2', hair: '#2b1b12', st: 'short', shirt: '#2862c8' },
+  { id: 'qiz', n: 'Qiz', ic: '👩', k: 'h', skin: '#f7d8bc', hair: '#1c1311', st: 'long', shirt: '#d83a72' },
+  { id: 'chol', n: 'Cholim', ic: '👴', k: 'h', skin: '#e8be96', hair: '#ececec', st: 'beard', hat: '#1a1a1a', shirt: '#2d8454' },
+  { id: 'bola', n: 'Bola', ic: '🧒', k: 'h', skin: '#f5cca5', hair: '#7d4d25', st: 'cap', cap: '#e85d26', shirt: '#f2b524' },
+  { id: 'mushuk', n: 'Mushuk', ic: '🐱', k: 'a', fur: '#ea9f44', belly: '#fff4e1', ear: 'cone', shirt: '#7c4cd8' },
+  { id: 'ayiq', n: 'Ayiq', ic: '🐻', k: 'a', fur: '#8d5c39', belly: '#dbb792', ear: 'ball', shirt: '#d85936' },
+  { id: 'quyon', n: 'Quyon', ic: '🐰', k: 'a', fur: '#f4f4f4', belly: '#ffe6ef', ear: 'long', shirt: '#32a2a2' },
+  { id: 'tulki', n: 'Tulki', ic: '🦊', k: 'a', fur: '#e26727', belly: '#fff6e9', ear: 'cone', shirt: '#284b8e' }
 ];
 
 export const LOOK = { front: [0, 0], left: [-.75, 0], right: [.75, 0], up: [0, -.4], down: [0, .38] };
@@ -21,7 +21,7 @@ const _hg = (() => {
   s.bezierCurveTo(-.46, .42, -.1, .5, 0, .22);
   s.bezierCurveTo(.1, .5, .46, .42, .5, .17);
   s.bezierCurveTo(.55, -.1, .1, -.4, 0, -.5);
-  const g = new THREE.ExtrudeGeometry(s, { depth: .2, bevelEnabled: false });
+  const g = new THREE.ExtrudeGeometry(s, { depth: .2, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.04, bevelThickness: 0.04 });
   g.translate(0, 0, -.1);
   return g;
 })();
@@ -33,7 +33,7 @@ const _sg = (() => {
     i ? s.lineTo(Math.cos(a) * r, Math.sin(a) * r) : s.moveTo(Math.cos(a) * r, Math.sin(a) * r);
   }
   s.closePath();
-  const g = new THREE.ExtrudeGeometry(s, { depth: .2, bevelEnabled: false });
+  const g = new THREE.ExtrudeGeometry(s, { depth: .2, bevelEnabled: true, bevelSegments: 2, bevelSize: 0.03, bevelThickness: 0.03 });
   g.translate(0, 0, -.1);
   return g;
 })();
@@ -42,13 +42,15 @@ const _et = {};
 export function emojiTex(ch) {
   if (_et[ch]) return _et[ch];
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
+  c.width = c.height = 256;
   const g = c.getContext('2d');
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.font = '92px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-  g.fillText(ch, 64, 70);
-  return _et[ch] = new THREE.CanvasTexture(c);
+  g.font = '180px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  g.fillText(ch, 128, 140);
+  const tex = new THREE.CanvasTexture(c);
+  tex.generateMipmaps = true;
+  return _et[ch] = tex;
 }
 
 const _ab = Math.abs, _sn = Math.sin, _cs = Math.cos;
@@ -122,44 +124,50 @@ _PRE.rofl = u => ({ ..._PRE.laugh(u), tz: _sn(u * 9) * .45, rz: _sn(u * 9) * .35
 
 export class Avatar {
   constructor(d) {
-    const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: .65 }, o || {})),
-      Sp = (r, m, sx = 1, sy = 1, sz = 1) => { const x = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), m); x.scale.set(sx, sy, sz); return x; },
+    const M = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: .45, metalness: .08 }, o || {})),
+      Sp = (r, m, sx = 1, sy = 1, sz = 1) => { const x = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 24), m); x.scale.set(sx, sy, sz); return x; },
       add = (p, o, x = 0, y = 0, z = 0) => { o.position.set(x, y, z); p.add(o); return o; };
-    const hum = d.k == 'h', skin = M(hum ? d.skin : d.fur), shirt = M(d.shirt), dark = M('#16161d', { roughness: .3 }), white = M('#ffffff', { roughness: .3 });
+    const hum = d.k == 'h', skin = M(hum ? d.skin : d.fur), shirt = M(d.shirt), dark = M('#111116', { roughness: .25 }), white = M('#ffffff', { roughness: .2 });
     const g = this.g = new THREE.Group(), tor = this.tor = new THREE.Group(), head = this.head = new THREE.Group();
     g.add(tor);
-    // tana (belidan yuqori)
-    add(tor, new THREE.Mesh(new THREE.CylinderGeometry(.74, .88, 1.3, 28), shirt), 0, .65, 0);
-    add(tor, Sp(.8, shirt, 1.1, .38, .75), 0, 1.28, 0);
-    add(tor, new THREE.Mesh(new THREE.CylinderGeometry(.17, .2, .35, 16), skin), 0, 1.5, 0);
+
+    // Tana (belidan yuqori)
+    add(tor, new THREE.Mesh(new THREE.CylinderGeometry(.75, .88, 1.3, 32), shirt), 0, .65, 0);
+    add(tor, Sp(.82, shirt, 1.1, .38, .75), 0, 1.28, 0);
+    add(tor, new THREE.Mesh(new THREE.CylinderGeometry(.18, .22, .35, 24), skin), 0, 1.5, 0);
+
+    // Qo'llar (kartalarni ushlab turishga moslangan)
     this.arm = [-1, 1].map(s => {
       const a = new THREE.Group();
       a.position.set(s * .98, 1.22, 0);
       tor.add(a);
-      add(a, new THREE.Mesh(new THREE.CylinderGeometry(.15, .13, .85, 14), shirt), 0, -.42, 0);
-      add(a, Sp(.16, skin), 0, -.9, 0);
-      a.rotation.z = s * .1;
-      a._z = s * .1;
+      add(a, new THREE.Mesh(new THREE.CylinderGeometry(.16, .14, .85, 20), shirt), 0, -.42, 0);
+      add(a, Sp(.17, skin), 0, -.9, 0);
+      a.rotation.z = s * .35; // Qo'llar oldinga va kartaga qarab egilgan
+      a.rotation.x = -.55;
+      a._z = s * .35;
       a._s = s;
       return a;
     });
-    // bosh
+
+    // Bosh
     add(tor, head, 0, 2.0, 0);
-    add(head, Sp(.62, skin));
-    // ko'zlar
+    add(head, Sp(.64, skin));
+
+    // Ko'zlar
     this.ey = [-1, 1].map(s => {
       const e = new THREE.Group();
-      add(head, e, s * .22, .1, .56);
+      add(head, e, s * .22, .1, .58);
       const o = new THREE.Group();
-      add(o, Sp(.085, dark, 1, 1.15, .6));
-      add(o, Sp(.03, white), .025, .035, .045);
+      add(o, Sp(.09, dark, 1, 1.15, .6));
+      add(o, Sp(.032, white), .028, .038, .048);
       e.add(o);
-      const h = new THREE.Mesh(new THREE.TorusGeometry(.075, .022, 8, 16, Math.PI), dark);
+      const h = new THREE.Mesh(new THREE.TorusGeometry(.075, .022, 12, 24, Math.PI), dark);
       const c = new THREE.Mesh(new THREE.BoxGeometry(.17, .03, .03), dark);
-      const ht = new THREE.Mesh(_hg, M('#ff2d55', { emissive: '#a00020', roughness: .4 }));
-      ht.scale.setScalar(.3);
-      const stz = new THREE.Mesh(_sg, M('#ffd23f', { emissive: '#ff9d00', roughness: .4 }));
-      stz.scale.setScalar(.2);
+      const ht = new THREE.Mesh(_hg, M('#ff2d55', { emissive: '#b00025', roughness: .3 }));
+      ht.scale.setScalar(.32);
+      const stz = new THREE.Mesh(_sg, M('#ffd23f', { emissive: '#ff9d00', roughness: .3 }));
+      stz.scale.setScalar(.22);
       stz.position.z = .03;
       const xx = new THREE.Group();
       [.785, -.785].forEach(a => {
@@ -173,23 +181,26 @@ export class Avatar {
       e.o = o; e.h = h; e.c = c; e.ht = ht; e.stz = stz; e.xx = xx; e.br = br;
       return e;
     });
-    // quyosh ko'zoynagi
-    this.sg = new THREE.Mesh(new THREE.BoxGeometry(.66, .17, .08), M('#0b0b10', { roughness: .15 }));
-    add(head, this.sg, 0, .1, .64);
+
+    // Quyosh ko'zoynagi
+    this.sg = new THREE.Mesh(new THREE.BoxGeometry(.68, .18, .09), M('#0a0a0f', { roughness: .1, metalness: .5 }));
+    add(head, this.sg, 0, .1, .66);
     this.sg.visible = false;
-    // yuzdagi qizillik
-    [-1, 1].forEach(s => add(head, Sp(.1, M('#ff8fa3', { transparent: true, opacity: .55 }), 1, .7, .3), s * .4, -.08, .45));
-    // og'iz
+
+    // Yuzdagi qizillik
+    [-1, 1].forEach(s => add(head, Sp(.11, M('#ff8fa3', { transparent: true, opacity: .55 }), 1, .7, .3), s * .4, -.08, .47));
+
+    // Og'iz
     const m = this.mo = new THREE.Group();
-    add(head, m, 0, hum ? -.24 : -.25, hum ? .57 : .69);
-    const sm = new THREE.Mesh(new THREE.TorusGeometry(.15, .025, 8, 20, Math.PI), dark);
+    add(head, m, 0, hum ? -.24 : -.25, hum ? .58 : .7);
+    const sm = new THREE.Mesh(new THREE.TorusGeometry(.15, .025, 12, 24, Math.PI), dark);
     sm.rotation.z = Math.PI;
     sm.position.y = .05;
     const op = new THREE.Group();
-    add(op, Sp(.15, M('#4a0d1c', { roughness: .5 }), 1, .85, .5));
+    add(op, Sp(.15, M('#4a0d1c', { roughness: .4 }), 1, .85, .5));
     add(op, Sp(.08, M('#e8607a'), 1, .5, .5), 0, -.07, .02);
     op.position.y = -.03;
-    const fr = new THREE.Mesh(new THREE.TorusGeometry(.15, .025, 8, 20, Math.PI), dark);
+    const fr = new THREE.Mesh(new THREE.TorusGeometry(.15, .025, 12, 24, Math.PI), dark);
     fr.position.y = -.1;
     const fl = new THREE.Mesh(new THREE.BoxGeometry(.26, .035, .03), dark);
     fl.position.y = -.02;
@@ -197,89 +208,96 @@ export class Avatar {
     tg.position.set(0, -.13, .04);
     m.add(sm, op, fr, fl, tg);
     this.mm = { sm, op, fr, fl, tg };
+
     if (hum) {
-      [-1, 1].forEach(s => add(head, Sp(.12, skin, .6, 1, 1), s * .61, 0, 0));
-      add(head, Sp(.065, skin), 0, -.04, .6);
-      const hm = M(d.hair, { roughness: .9 });
+      [-1, 1].forEach(s => add(head, Sp(.13, skin, .6, 1, 1), s * .63, 0, 0));
+      add(head, Sp(.07, skin), 0, -.04, .62);
+      const hm = M(d.hair, { roughness: .75 });
       const cap = (mat) => {
-        const c = new THREE.Mesh(new THREE.SphereGeometry(.655, 24, 12, 0, Math.PI * 2, 0, Math.PI * .46), mat);
+        const c = new THREE.Mesh(new THREE.SphereGeometry(.67, 32, 16, 0, Math.PI * 2, 0, Math.PI * .46), mat);
         c.rotation.x = -.3;
         head.add(c);
       };
       if (d.st == 'short') cap(hm);
       if (d.st == 'long') {
         cap(hm);
-        add(head, Sp(.7, hm, 1, 1.1, .62), 0, -.2, -.28);
-        [-1, 1].forEach(s => add(head, new THREE.Mesh(new THREE.CylinderGeometry(.13, .1, .9, 12), hm), s * .56, -.3, 0));
+        add(head, Sp(.72, hm, 1, 1.1, .62), 0, -.2, -.28);
+        [-1, 1].forEach(s => add(head, new THREE.Mesh(new THREE.CylinderGeometry(.14, .11, .9, 16), hm), s * .58, -.3, 0));
       }
       if (d.st == 'cap') {
-        const cm = M(d.cap, { roughness: .8 });
+        const cm = M(d.cap, { roughness: .6 });
         cap(cm);
-        const v = add(head, new THREE.Mesh(new THREE.BoxGeometry(.7, .05, .4), cm), 0, .3, .68);
+        const v = add(head, new THREE.Mesh(new THREE.BoxGeometry(.72, .05, .42), cm), 0, .3, .7);
         v.rotation.x = .2;
       }
       if (d.st == 'beard') {
-        add(head, new THREE.Mesh(new THREE.CylinderGeometry(.46, .6, .34, 28), M(d.hat)), 0, .52, 0);
-        const b = add(head, new THREE.Mesh(new THREE.TorusGeometry(.53, .02, 6, 32), white), 0, .5, 0);
+        add(head, new THREE.Mesh(new THREE.CylinderGeometry(.48, .62, .34, 32), M(d.hat)), 0, .54, 0);
+        const b = add(head, new THREE.Mesh(new THREE.TorusGeometry(.55, .025, 8, 36), white), 0, .52, 0);
         b.rotation.x = Math.PI / 2;
-        [-1, 1].forEach(s => add(head, Sp(.16, hm, .6, 1.4, .8), s * .58, -.02, -.05));
-        add(head, Sp(.42, hm, 1, .7, .65), 0, -.5, .24);
-        add(head, Sp(.1, hm, 2.2, .5, .6), 0, -.1, .58);
+        [-1, 1].forEach(s => add(head, Sp(.17, hm, .6, 1.4, .8), s * .6, -.02, -.05));
+        add(head, Sp(.44, hm, 1, .7, .65), 0, -.5, .24);
+        add(head, Sp(.11, hm, 2.2, .5, .6), 0, -.1, .6);
       }
     } else {
-      add(head, Sp(.27, M(d.belly), 1, .72, .8), 0, -.16, .46);
-      add(head, Sp(.065, dark, 1.2, .8, .8), 0, -.07, .71);
+      add(head, Sp(.28, M(d.belly), 1, .72, .8), 0, -.16, .48);
+      add(head, Sp(.07, dark, 1.2, .8, .8), 0, -.07, .73);
       const pink = M('#ffb3c0');
       if (d.ear == 'cone') {
         [-1, 1].forEach(s => {
-          const e = add(head, new THREE.Mesh(new THREE.ConeGeometry(.22, .5, 4), skin), s * .38, .62, 0);
+          const e = add(head, new THREE.Mesh(new THREE.ConeGeometry(.24, .52, 8), skin), s * .39, .64, 0);
           e.rotation.z = -s * .35;
-          const i = add(head, new THREE.Mesh(new THREE.ConeGeometry(.12, .3, 4), pink), s * .37, .6, .07);
+          const i = add(head, new THREE.Mesh(new THREE.ConeGeometry(.13, .32, 8), pink), s * .38, .62, .07);
           i.rotation.z = -s * .35;
         });
       }
       if (d.ear == 'ball') {
         [-1, 1].forEach(s => {
-          add(head, Sp(.22, skin), s * .46, .5, -.02);
-          add(head, Sp(.12, M(d.belly), 1, 1, .5), s * .46, .5, .12);
+          add(head, Sp(.24, skin), s * .48, .52, -.02);
+          add(head, Sp(.13, M(d.belly), 1, 1, .5), s * .48, .52, .12);
         });
       }
       if (d.ear == 'long') {
         [-1, 1].forEach(s => {
-          const e = add(head, Sp(.17, skin, 1, 3.2, .55), s * .24, 1.0, -.05);
+          const e = add(head, Sp(.18, skin, 1, 3.2, .55), s * .25, 1.05, -.05);
           e.rotation.z = -s * .12;
-          const i = add(head, Sp(.09, pink, 1, 2.8, .4), s * .24, .98, .06);
+          const i = add(head, Sp(.095, pink, 1, 2.8, .4), s * .25, 1.03, .06);
           i.rotation.z = -s * .12;
         });
       }
     }
-    // ko'z yoshlari
+
+    // Ko'z yoshlari
     this.tr = [0, 1, 2, 3].map(() => {
-      const t = Sp(.05, M('#6ec6ff', { emissive: '#2a7ab0' }), .8, 1.3, .8);
+      const t = Sp(.055, M('#6ec6ff', { emissive: '#2a7ab0' }), .8, 1.3, .8);
       t.visible = false;
       head.add(t);
       return t;
     });
-    // uchib chiqadigan yuraklar
+
+    // Yuraklar
     this.hf = [0, 1, 2, 3, 4].map(() => {
       const h = new THREE.Mesh(_hg, M('#ff4d7a', { emissive: '#b0002a' }));
       h.visible = false;
       g.add(h);
       return h;
     });
+
+    // Katta yorqin smayliklar (bosh ustida paydo bo'ladigan)
     this.spr = [0, 1, 2, 3, 4, 5].map(() => {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false }));
       sp.visible = false;
-      sp.renderOrder = 10;
+      sp.renderOrder = 20;
       g.add(sp);
       return sp;
     });
+
     this.spk = [0, 1, 2, 3, 4, 5].map(() => {
-      const m = Sp(.06, M('#ffe066', { emissive: '#ffb300', roughness: .3 }));
+      const m = Sp(.065, M('#ffe066', { emissive: '#ffb300', roughness: .2 }));
       m.visible = false;
       g.add(m);
       return m;
     });
+
     this.t0 = 0;
     this.ch = null;
     this.st = 'idle';
@@ -299,8 +317,8 @@ export class Avatar {
     this.lkT = this._t + dur;
   }
 
-  play(s, dur = 2.4, ch) {
-    this.st = s;
+  play(s, dur = 2.8, ch) {
+    this.st = s || 'smile';
     this.t0 = this._t;
     this.until = this._t + dur;
     this.ch = ch || null;
@@ -399,13 +417,14 @@ export class Avatar {
     if (mouth == 'tongue') mm.tg.position.y = -.13 - .025 * Math.sin(t * 10);
     this.mo.scale.set(ms, mouth == 'op' ? msy : 1, 1);
 
+    // Qo'llar: odatiy holatda kartani ushlab turadi, emotsiya paytida animatsiya qiladi
     const AP = P && P.A;
     this.arm.forEach((a, i) => {
-      const p = AP && AP[i],
-        tz = a._s * (p ? p[0] : .1),
-        tx = p ? p[1] : Math.sin(t * 1.4 + i) * .04;
-      a.rotation.z += (tz - a.rotation.z) * k;
-      a.rotation.x += (tx - a.rotation.x) * k;
+      const p = AP && AP[i];
+      const baseZ = a._s * (p ? p[0] : .35);
+      const baseX = p ? p[1] : (-.55 + Math.sin(t * 1.4 + i) * .03);
+      a.rotation.z += (baseZ - a.rotation.z) * k;
+      a.rotation.x += (baseX - a.rotation.x) * k;
     });
 
     const fx = P && P.fx;
@@ -457,8 +476,8 @@ export class Avatar {
       if (j == 0) {
         const pop = (1 - Math.exp(-u * 14)) * (1 + .18 * Math.sin(u * 14) * Math.exp(-u * 2.5));
         sp.visible = true;
-        sp.position.set(0, 3.4 + Math.sin(t * 4) * .05, .3);
-        sp.scale.setScalar(pop * (.4 + .6 * tail));
+        sp.position.set(0, 3.5 + Math.sin(t * 4) * .05, .3);
+        sp.scale.setScalar(pop * (1.1 + .4 * tail));
         sp.material.opacity = tail;
       } else {
         const d0 = u - j * .12;
@@ -468,8 +487,8 @@ export class Avatar {
         }
         const f = (d0 * .55) % 1;
         sp.visible = true;
-        sp.position.set((j - 3) * .36 + Math.sin(u * 3 + j * 2) * .12, 2.95 + f * 1.1, .35);
-        sp.scale.setScalar((.1 + .3 * Math.sin(f * Math.PI)) * tail);
+        sp.position.set((j - 3) * .38 + Math.sin(u * 3 + j * 2) * .12, 3.1 + f * 1.2, .35);
+        sp.scale.setScalar((.35 + .4 * Math.sin(f * Math.PI)) * tail);
         sp.material.opacity = Math.sin(f * Math.PI) * tail;
       }
     });

@@ -21,7 +21,6 @@ import {
   hasM,
   legal,
   win,
-  beats,
   PC,
   RA,
   SU,
@@ -78,11 +77,12 @@ export function App() {
   const [audioSettings, setAudioSettings] = useState(getAudioSettings());
   const [selCards, setSelCards] = useState([]);
 
-  // Chat & Emoji
+  // Chat, Emoji and Avatar triggers
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatBubbles, setChatBubbles] = useState({});
   const [speakers, setSpeakers] = useState({});
+  const [emojiTrigger, setEmojiTrigger] = useState(null);
 
   // WebRTC mic
   const [micState, setMicState] = useState({ active: false, enabled: false });
@@ -91,11 +91,13 @@ export function App() {
   // Rooms
   const [roomList, setRoomList] = useState([]);
 
-  // Socket
+  // Sockets & Timers
   const wsRef = useRef(null);
   const pidRef = useRef('');
   const timerRef = useRef(null);
   const botTimerRef = useRef(null);
+  const pingIntervalRef = useRef(null);
+
   const GRef = useRef(G);
   GRef.current = G;
 
@@ -144,7 +146,9 @@ export function App() {
 
   const send = useCallback((obj) => {
     if (wsRef.current && wsRef.current.readyState === 1) {
-      wsRef.current.send(JSON.stringify(obj));
+      try {
+        wsRef.current.send(JSON.stringify(obj));
+      } catch (e) {}
     }
   }, []);
 
@@ -156,6 +160,13 @@ export function App() {
     }
   }, [act, send]);
 
+  // Clean selected cards when phase changes away from 'give'
+  useEffect(() => {
+    if (G && G.phase !== 'give') {
+      setSelCards([]);
+    }
+  }, [G?.phase]);
+
   // Connect WebSocket
   const conn = useCallback((cb) => {
     if (wsRef.current && wsRef.current.readyState === 1) {
@@ -163,10 +174,19 @@ export function App() {
       return;
     }
     const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const ws = new WebSocket(proto + window.location.host + '/ws');
+    const wsUrl = proto + window.location.host + '/ws';
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // Start ping heartbeat to keep Render and mobile connections alive
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = setInterval(() => {
+        if (ws.readyState === 1) {
+          try { ws.send(JSON.stringify({ t: 'ping' })); } catch (e) {}
+        }
+      }, 20000);
+
       if (cb) cb();
     };
 
@@ -178,6 +198,9 @@ export function App() {
         return;
       }
 
+      if (m.t === 'pong') {
+        return;
+      }
       if (m.t === 'err') {
         setErrorMsg(m.m);
         return;
@@ -211,8 +234,9 @@ export function App() {
     };
 
     ws.onclose = () => {
+      clearInterval(pingIntervalRef.current);
       if (!localRef.current && GRef.current && GRef.current.code) {
-        toast('Aloqa uzildi, qayta ulanmoqda…');
+        toast('Aloqa yangilanmoqda…');
         setTimeout(() => {
           conn(() => {
             send({
@@ -223,12 +247,12 @@ export function App() {
               pid: pidRef.current
             });
           });
-        }, 1500);
+        }, 1200);
       }
     };
   }, [prof, send]);
 
-  // Bot logic & step
+  // Bot logic & step for offline mode
   const botStep = useCallback(() => {
     clearTimeout(botTimerRef.current);
     if (!localRef.current || !GRef.current) return;
@@ -306,11 +330,14 @@ export function App() {
     }
   }, [G, local, act, botStep]);
 
-  // Card click handler
+  // Card click handler (PC mouse or Mobile touch)
   const handleCardClick = c => {
     if (!G) return;
     const m = me();
-    if (G.turn !== m) return;
+    if (G.turn !== m) {
+      toast('Hozir sizning navbatingiz emas');
+      return;
+    }
 
     if (G.phase === 'play') {
       playCardSound();
@@ -395,9 +422,7 @@ export function App() {
     if (G.players.length < 2) {
       const n = Math.max(2, G.max || 4);
       if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch (e) {}
+        try { wsRef.current.close(); } catch (e) {}
         wsRef.current = null;
       }
       handleStartBots(n);
@@ -436,16 +461,31 @@ export function App() {
 
   const handleSendEmoji = emoIdx => {
     if (!G) return;
+    const m = me();
     if (local) {
-      onEmojiReceived(me(), emoIdx);
+      onEmojiReceived(m, emoIdx);
     } else {
       send({ t: 'emo', e: emoIdx });
+      onEmojiReceived(m, emoIdx);
     }
   };
 
   const onEmojiReceived = (playerIdx, emoIdx) => {
-    // Emojis trigger 3D avatar animations
+    // 3D avatarda animatsiyani ishga tushirish!
+    setEmojiTrigger({ playerIdx, emoIdx, time: Date.now() });
   };
+
+  // Botlar vaqti-vaqti bilan smaylik yuborib turadi
+  useEffect(() => {
+    const intv = setInterval(() => {
+      if (localRef.current && GRef.current && GRef.current.players && GRef.current.players.length > 1 && Math.random() < 0.45) {
+        const randBot = 1 + Math.floor(Math.random() * (GRef.current.players.length - 1));
+        const randEmo = Math.floor(Math.random() * EM.length);
+        onEmojiReceived(randBot, randEmo);
+      }
+    }, 6500);
+    return () => clearInterval(intv);
+  }, []);
 
   // Mic toggle
   const handleToggleMic = async () => {
@@ -477,8 +517,8 @@ export function App() {
   };
 
   return (
-    <div onClick={() => initAudio()}>
-      {/* 3D Three.js canvas & card table */}
+    <div onClick={() => initAudio()} style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* 3D Three.js canvas: 4 burchakli stol, avatarlar va qo'ldagi kartalar */}
       <GameCanvas
         G={G}
         meIdx={meIdx}
@@ -490,6 +530,7 @@ export function App() {
         speakers={speakers}
         chatBubbles={chatBubbles}
         isMenuOpen={isMenuOpen}
+        emojiTrigger={emojiTrigger}
       />
 
       {/* Top HUD (Scores, trump, messages) */}
@@ -545,16 +586,12 @@ export function App() {
         cardStyle={cardStyle}
         setCardStyle={val => {
           setCardStyle(val);
-          try {
-            localStorage.setItem('cs', String(val));
-          } catch (e) {}
+          try { localStorage.setItem('cs', String(val)); } catch (e) {}
         }}
         backColor={backColor}
         setBackColor={val => {
           setBackColor(val);
-          try {
-            localStorage.setItem('bk', val);
-          } catch (e) {}
+          try { localStorage.setItem('bk', val); } catch (e) {}
         }}
         audioSettings={audioSettings}
         setAudioSettings={setAudioSettings}
