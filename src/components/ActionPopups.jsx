@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { nm, cn, hasM } from '../game/game.js';
 
-export function ActionPopups({ G, meIdx, local, selCards, onAction }) {
+export function ActionPopups({ G, meIdx, local, selCards, setSelCards, onAction }) {
   if (!G || !G.players || G.phase === 'lobby') return null;
 
   const m = local ? G.players.findIndex(p => p.id === 'me') : meIdx;
@@ -74,25 +74,87 @@ export function ActionPopups({ G, meIdx, local, selCards, onAction }) {
     if (isMyTurn) {
       const gv = G.gv || [];
       const hasTarget = gv[0] && gv[0].to != null;
+      const myHand = G.hands[m] || [];
+
+      // Kartani bosganda tanlash yoki bekor qilish funksiyasi
+      const toggleCard = (c) => {
+        if (!setSelCards) return;
+        setSelCards(prev => {
+          const idx = prev.indexOf(c);
+          if (idx >= 0) {
+            return prev.filter(x => x !== c);
+          } else if (prev.length < 2) {
+            return [...prev, c];
+          } else {
+            return [prev[0], c];
+          }
+        });
+      };
+
+      const handleSend = () => {
+        if (selCards.length !== 2) return;
+        onAction('giveB', selCards[0], selCards[1]);
+        if (setSelCards) setSelCards([]);
+      };
+
       content = (
         <>
-          <div>{hasTarget ? '2 ta karta bering' : 'Ortiqcha 2 ta kartani tanlang'}</div>
+          <div style={{ fontWeight: 700, fontSize: '16px', color: '#e8b84a' }}>
+            {hasTarget ? '2 ta kartani bering' : 'Ortiqcha 2 ta kartani tashlang'}
+          </div>
+
           {[0, 1].map(k => (
-            <div key={k} style={{ fontSize: '16px', margin: '5px 0' }}>
+            <div key={k} style={{ fontSize: '14px', margin: '4px 0' }}>
               {k + 1}-karta{gv[k] && gv[k].to != null ? ' → ' + nm(G, gv[k].to) : ''}:{' '}
-              <b>{selCards[k] != null ? cn(selCards[k]) : '—'}</b>
+              <b style={{ color: selCards[k] != null ? '#ffd700' : '#888', fontSize: '16px' }}>
+                {selCards[k] != null ? cn(selCards[k]) : '— tanlanmagan'}
+              </b>
             </div>
           ))}
-          <div className="r">
+
+          {/* Qo'ldagi kartalarni to'g'ridan-to'g'ri bitta bosish bilan tanlash (Telefonda 100% qulay) */}
+          <div style={{ fontSize: '12px', marginTop: '6px', color: '#aaa' }}>
+            Qo‘lingizdagi kartalardan 2 tasini bosing:
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', justifyContent: 'center', margin: '8px 0', maxWidth: '300px' }}>
+            {myHand.map(c => {
+              const isSelected = selCards.includes(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggleCard(c)}
+                  style={{
+                    padding: '6px 8px',
+                    fontSize: '13px',
+                    borderRadius: '8px',
+                    background: isSelected ? '#ffd700' : '#1e382b',
+                    color: isSelected ? '#111' : '#fff',
+                    border: isSelected ? '2px solid #fff' : '1px solid #e8b84a66',
+                    cursor: 'pointer',
+                    minWidth: '42px',
+                    fontWeight: isSelected ? 800 : 600
+                  }}
+                >
+                  {cn(c)}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="r" style={{ marginTop: '8px' }}>
             <button
               disabled={selCards.length !== 2}
-              onClick={() => onAction('giveB', selCards[0], selCards[1])}
+              style={{
+                fontSize: '17px',
+                padding: '12px 24px',
+                background: selCards.length === 2 ? '#e8b84a' : '#555',
+                color: selCards.length === 2 ? '#111' : '#aaa'
+              }}
+              onClick={handleSend}
             >
-              Yuborish
+              Yuborish ({selCards.length}/2)
             </button>
-          </div>
-          <div style={{ fontSize: '12px' }}>
-            Pastdan 2 ta kartani tanlang (qayta bossangiz bekor bo‘ladi)
           </div>
         </>
       );

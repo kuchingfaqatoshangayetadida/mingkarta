@@ -542,6 +542,7 @@ export function App() {
         meIdx={meIdx}
         local={local}
         selCards={selCards}
+        setSelCards={setSelCards}
         onAction={dx}
       />
 

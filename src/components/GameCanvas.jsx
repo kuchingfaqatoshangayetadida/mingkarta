@@ -36,6 +36,7 @@ export function GameCanvas({
     lg: new Set(),
     hl: new Set(),
     lastT2: 0,
+    lastTapTime: 0,
     KX: 1,
     clk: new THREE.Clock()
   });
@@ -71,17 +72,24 @@ export function GameCanvas({
 
     const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 70);
     const rs = () => {
+      const isMobile = window.innerWidth < 768;
       ren.setSize(window.innerWidth, window.innerHeight);
       cam.aspect = window.innerWidth / window.innerHeight;
       cam.updateProjectionMatrix();
-      const k = Math.max(1 / cam.aspect - 1, 0);
-      cam.base = [0, 9.2 + k * 5.2, 10.6 + k * 6.2];
+
+      if (isMobile) {
+        const k = Math.max(1 / cam.aspect - 1, 0);
+        cam.base = [0, 10.5 + k * 4.2, 10.8 + k * 5.0];
+      } else {
+        const k = Math.max(1 / cam.aspect - 1, 0);
+        cam.base = [0, 9.2 + k * 4.5, 10.2 + k * 5.5];
+      }
     };
     window.addEventListener('resize', rs);
     rs();
 
     // Lighting
-    sc.add(new THREE.AmbientLight(0xffffff, 0.75));
+    sc.add(new THREE.AmbientLight(0xffffff, 0.8));
     const pl = new THREE.PointLight(0xffe6b0, 1.0, 45);
     pl.position.set(0, 9.5, 2);
     sc.add(pl);
@@ -96,13 +104,13 @@ export function GameCanvas({
     const tableGroup = new THREE.Group();
     sc.add(tableGroup);
 
-    // 1. Tashqi quyuq yog'och ramka (Wood Bevel Rim - 4 burchak)
+    // 1. Tashqi quyuq yog'och ramka (Wood Rim - 4 burchak)
     const rimWidth = 15.6, rimDepth = 12.6, rimHeight = 0.35;
     const woodRim = new THREE.Mesh(
       new THREE.BoxGeometry(rimWidth, rimHeight, rimDepth),
       new THREE.MeshStandardMaterial({
         color: 0x3d1c08,
-        roughness: 0.4,
+        roughness: 0.45,
         metalness: 0.15
       })
     );
@@ -115,7 +123,7 @@ export function GameCanvas({
       new THREE.MeshStandardMaterial({
         color: 0xd4af37,
         roughness: 0.3,
-        metalness: 0.8
+        metalness: 0.85
       })
     );
     goldTrim.position.y = 0.005;
@@ -204,11 +212,11 @@ export function GameCanvas({
       // Dust & camera sway
       dust.rotation.y = t * 0.03;
       cam.position.set(
-        cam.base[0] + Math.sin(t * 0.3) * 0.4,
-        cam.base[1] + Math.sin(t * 0.5) * 0.12,
+        cam.base[0] + Math.sin(t * 0.3) * 0.3,
+        cam.base[1] + Math.sin(t * 0.5) * 0.1,
         cam.base[2]
       );
-      cam.lookAt(0, 0, 2.2);
+      cam.lookAt(0, 0, 1.8);
       pl.intensity = 0.95 + Math.sin(t * 2) * 0.08;
 
       // Update avatars
@@ -232,6 +240,10 @@ export function GameCanvas({
 
       if (inGame) {
         const N = game.players.length;
+
+        // O'yinchilar stolning 4 tomonining o'rtasida o'tirishi (Davrada):
+        // 0: Men (Pastki o'rta)
+        // 1, 2, 3: Qolgan o'yinchilar
         game.players.forEach((p, i) => {
           let o = avs[i];
           if (!o) {
@@ -240,15 +252,54 @@ export function GameCanvas({
             sc.add(a.g);
             o = avs[i] = { a, id: p.av };
           }
-          const th = -(((i - m + N) % N) * 2 * Math.PI) / N;
-          const mine = i === m;
 
-          // 4 burchakli stolga moslangan o'yinchilar joylashuvi
-          const x = mine ? -5.0 * stateRef.current.KX : Math.sin(th) * 6.8 * stateRef.current.KX;
-          const z = mine ? 7.1 : Math.cos(th) * 6.2;
-          o.a.g.position.set(x, 0, z);
-          o.a.g.rotation.y = Math.atan2(-x, -z);
-          o.a.g.scale.setScalar(mine ? 0.92 : 1.15);
+          const relIdx = (i - m + N) % N;
+          let posX = 0, posZ = 0, rotY = 0;
+
+          if (relIdx === 0) {
+            // Men: Pastki tomonning qoq o'rtasida
+            posX = -4.5 * stateRef.current.KX;
+            posZ = 6.8;
+            rotY = 0.35;
+          } else if (N === 2) {
+            // 2 kishi bo'lsa: Raqib ro'paramizda (Yuqori tomonning o'rtasida)
+            posX = 0;
+            posZ = -6.2;
+            rotY = Math.PI;
+          } else if (N === 3) {
+            // 3 kishi bo'lsa: 1-raqib Chap tomon o'rtasida, 2-raqib O'ng tomon o'rtasida
+            if (relIdx === 1) {
+              posX = -7.2 * stateRef.current.KX;
+              posZ = -1.2;
+              rotY = Math.PI * 0.45;
+            } else {
+              posX = 7.2 * stateRef.current.KX;
+              posZ = -1.2;
+              rotY = -Math.PI * 0.45;
+            }
+          } else {
+            // 4 kishi bo'lsa: Aniq 4 tomonning o'rtasida
+            if (relIdx === 1) {
+              // Chap tomon o'rtasi
+              posX = -7.4 * stateRef.current.KX;
+              posZ = 0;
+              rotY = Math.PI * 0.5;
+            } else if (relIdx === 2) {
+              // Qarshi (Yuqori) tomon o'rtasi
+              posX = 0;
+              posZ = -6.4;
+              rotY = Math.PI;
+            } else if (relIdx === 3) {
+              // O'ng tomon o'rtasi
+              posX = 7.4 * stateRef.current.KX;
+              posZ = 0;
+              rotY = -Math.PI * 0.5;
+            }
+          }
+
+          o.a.g.position.set(posX, 0, posZ);
+          o.a.g.rotation.y = rotY;
+          o.a.g.scale.setScalar(relIdx === 0 ? 0.92 : 1.15);
           o.a.talk = !!curProps.speakers[i];
           o.a.update(tSec, dt);
         });
@@ -309,7 +360,7 @@ export function GameCanvas({
 
     loop();
 
-    // Raycasting & Pointer/Touch events for both PC and Mobile
+    // Raycasting & Touch/Click handling with Debounce (solves mobile double-tap bug)
     const rc = new THREE.Raycaster();
     const mv = new THREE.Vector2();
 
@@ -335,10 +386,14 @@ export function GameCanvas({
       }
     };
 
-    const handlePointerDown = (e) => {
-      // Both touch and mouse click
-      const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-      const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const handleTapOrClick = (clientX, clientY) => {
+      const now = performance.now();
+      // Debounce: 250ms dan kam vaqtda kelgan takroriy touch/mouse eventlarni bekor qilish
+      if (now - stateRef.current.lastTapTime < 250) {
+        return;
+      }
+      stateRef.current.lastTapTime = now;
+
       const c = getRayCard(clientX, clientY);
       const cur = propsRef.current;
       const g = cur.G;
@@ -350,16 +405,28 @@ export function GameCanvas({
       cur.onCardClick(c);
     };
 
+    const onPointerDown = (e) => {
+      if (e.pointerType === 'touch') return; // Touchstart handles touch devices
+      handleTapOrClick(e.clientX, e.clientY);
+    };
+
+    const onTouchStart = (e) => {
+      if (e.touches && e.touches.length > 0) {
+        const touch = e.touches[0];
+        handleTapOrClick(touch.clientX, touch.clientY);
+      }
+    };
+
     const domEl = ren.domElement;
     domEl.addEventListener('pointermove', handlePointerMove, { passive: true });
-    domEl.addEventListener('pointerdown', handlePointerDown);
-    domEl.addEventListener('touchstart', handlePointerDown, { passive: true });
+    domEl.addEventListener('pointerdown', onPointerDown);
+    domEl.addEventListener('touchstart', onTouchStart, { passive: true });
 
     return () => {
       window.removeEventListener('resize', rs);
       domEl.removeEventListener('pointermove', handlePointerMove);
-      domEl.removeEventListener('pointerdown', handlePointerDown);
-      domEl.removeEventListener('touchstart', handlePointerDown);
+      domEl.removeEventListener('pointerdown', onPointerDown);
+      domEl.removeEventListener('touchstart', onTouchStart);
       cancelAnimationFrame(stateRef.current.animId);
       if (ren.domElement && ren.domElement.parentNode) {
         ren.domElement.parentNode.removeChild(ren.domElement);
@@ -396,6 +463,7 @@ export function GameCanvas({
 
     const N = G.players.length;
     const m = local ? G.players.findIndex(p => p.id === 'me') : meIdx;
+    const isMobile = window.innerWidth < 768;
 
     const lg = new Set();
     const hl = new Set();
@@ -407,7 +475,6 @@ export function GameCanvas({
       const VW = 2 * Math.hypot(cam.base[1] - 0.8, cam.base[2] - 5.4) * 0.466 * cam.aspect * 0.86;
       const placed = new Set();
       stateRef.current.KX = Math.min(1, (VW * 0.4) / 5.6);
-      const KX = stateRef.current.KX;
 
       const E = new THREE.Euler(0, 0, 0, 'YXZ');
       const put = (cObj, x, y, z, rx, ry, s = 1) => {
@@ -435,8 +502,6 @@ export function GameCanvas({
         put(o, ...a);
       };
 
-      const T = i => -(((i - m + N) % N) * 2 * Math.PI) / N;
-
       if (G.turn === m) {
         if (G.phase === 'play') {
           const L = FREE ? G.hands[m] : legal(G.hands[m], G.trick, G.trump);
@@ -453,63 +518,106 @@ export function GameCanvas({
 
       // ========================================================
       // O'YINCHILARNING KARTALARINI QO'LDA USHLAB TURISH (HANDS)
+      // Stol tomonlarining markazida
       // ========================================================
       for (let i = 0; i < N; i++) {
-        const th = T(i);
-        const dx = Math.sin(th), dz = Math.cos(th), px = Math.cos(th), pz = -Math.sin(th);
+        const relIdx = (i - m + N) % N;
         const h = (G.hands[i] || []).slice().sort((a, b) => (i === m ? SU(b) - SU(a) || RA(b) - RA(a) : 0));
         const n = h.length;
-        const me_ = i === m;
 
-        if (me_) {
+        if (relIdx === 0) {
           // O'ZIMIZNING QO'LIMIZDAGI KARTALAR:
-          // Pastda yoyilib (arc fan), qo'lda ushlangandek qulay burchakda turadi
-          const sp = Math.min(0.95, (VW - 1.2) / Math.max(n - 1, 1));
+          // Pastda xuddi qo'lda ushlangandek qulay, mobil rejimda ixcham va aniq
+          const cardScale = isMobile ? 1.25 : 1.45;
+          const maxSpread = isMobile ? Math.min(0.68, (VW - 0.8) / Math.max(n - 1, 1)) : Math.min(0.85, (VW - 1.0) / Math.max(n - 1, 1));
+
           h.forEach((c, k) => {
-            const offset = (k - (n - 1) / 2) * sp;
+            const offset = (k - (n - 1) / 2) * maxSpread;
             const isHovered = c === stateRef.current.hov;
             const isHighlighted = hl.has(c);
-            const lift = isHighlighted ? (isHovered ? 0.65 : 0.35) : (isHovered ? 0.25 : 0);
-            const fanAngle = -(k - (n - 1) / 2) * 0.045; // Yelpig'ich qiyaligi
+            const lift = isHighlighted ? (isHovered ? 0.65 : 0.4) : (isHovered ? 0.25 : 0);
+            const fanAngle = -(k - (n - 1) / 2) * (isMobile ? 0.035 : 0.045);
 
             pl(
               c,
               k * N,
-              px * offset,
-              1.0 + k * 0.015 + lift,
-              6.5 - Math.abs(offset) * 0.08 - lift * 0.3,
-              0.55, // Karta bizga qarab egilgan
+              offset,
+              (isMobile ? 0.9 : 1.0) + k * 0.015 + lift,
+              (isMobile ? 6.2 : 6.4) - Math.abs(offset) * 0.08 - lift * 0.3,
+              0.55,
               fanAngle,
-              1.55 // O'zimizga katta va aniq ko'rinadi
+              cardScale
             );
           });
         } else {
           // RAQIBLARNING KARTALARI:
-          // Raqib avatari qo'lida (vertikal fan yelpig'ich shaklida ushlab turiladi)
-          const R = 5.6; // Raqib qo'li radiusi
-          const oppHandX = dx * R * KX;
-          const oppHandZ = dz * R;
-          const oppSp = 0.22; // Raqib qo'lidagi kartalar oralig'i
+          // Raqib avatari qo'lida (stol tomoni o'rtasida tikka fan shaklida ushlab turiladi)
+          let handBaseX = 0, handBaseZ = 0, handRotY = 0;
+          let px = 1, pz = 0;
 
+          if (N === 2) {
+            handBaseX = 0;
+            handBaseZ = -5.0;
+            handRotY = Math.PI;
+            px = 1; pz = 0;
+          } else if (N === 3) {
+            if (relIdx === 1) {
+              handBaseX = -5.8;
+              handBaseZ = -1.2;
+              handRotY = Math.PI * 0.45;
+              px = 0.4; pz = 0.9;
+            } else {
+              handBaseX = 5.8;
+              handBaseZ = -1.2;
+              handRotY = -Math.PI * 0.45;
+              px = 0.4; pz = -0.9;
+            }
+          } else {
+            if (relIdx === 1) {
+              handBaseX = -6.0;
+              handBaseZ = 0;
+              handRotY = Math.PI * 0.5;
+              px = 0; pz = 1;
+            } else if (relIdx === 2) {
+              handBaseX = 0;
+              handBaseZ = -5.2;
+              handRotY = Math.PI;
+              px = 1; pz = 0;
+            } else if (relIdx === 3) {
+              handBaseX = 6.0;
+              handBaseZ = 0;
+              handRotY = -Math.PI * 0.5;
+              px = 0; pz = -1;
+            }
+          }
+
+          const oppSp = 0.22;
           h.forEach((c, k) => {
             const offset = (k - (n - 1) / 2) * oppSp;
-            const fanRotZ = (k - (n - 1) / 2) * 0.08;
+            const fanRotZ = (k - (n - 1) / 2) * 0.07;
             pl(
               c,
-              k * N + ((i - m + N) % N),
-              oppHandX + px * offset,
-              1.25 + k * 0.018, // Raqib qo'l balandligida
-              oppHandZ + pz * offset,
-              Math.PI * 0.52, // Raqib qo'lida tikka ushlangan (orqasi ko'rinadi)
-              th + fanRotZ,
-              0.95 // Raqib kartasi o'lchami
+              k * N + relIdx,
+              handBaseX + px * offset,
+              1.25 + k * 0.016,
+              handBaseZ + pz * offset,
+              Math.PI * 0.52,
+              handRotY + fanRotZ,
+              0.88
             );
           });
         }
 
-        // Qabul qilingan kartalar (Cap / Tricks) - Stol chetida tartibli
+        // Qabul qilingan kartalar (Cap / Tricks) - Stol chetida
+        let capBaseX = 0, capBaseZ = 0;
+        if (relIdx === 0) { capBaseX = -5.8; capBaseZ = 4.2; }
+        else if (relIdx === 1 && N === 2) { capBaseX = 5.2; capBaseZ = -4.5; }
+        else if (relIdx === 1) { capBaseX = -5.8; capBaseZ = -2.8; }
+        else if (relIdx === 2) { capBaseX = 5.2; capBaseZ = -4.5; }
+        else if (relIdx === 3) { capBaseX = 5.8; capBaseZ = -1.5; }
+
         (G.cap[i] || []).forEach((c, k) => {
-          pl(c, 0, dx * 7.8 * KX + (k % 4) * 0.04, 0.18 + k * 0.025, dz * 7.2, Math.PI, th, 0.65);
+          pl(c, 0, capBaseX + (k % 4) * 0.04, 0.18 + k * 0.025, capBaseZ, Math.PI, 0, 0.6);
         });
       }
 
@@ -528,7 +636,7 @@ export function GameCanvas({
 
       // Stol o'rtasida o'ynalgan raund kartalari (Trick on table)
       (G.trick || []).forEach((t, k, a) => {
-        pl(t.c, 0, (k - (a.length - 1) / 2) * 0.95, 0.2 + k * 0.03, 1.4, 0, (k - 1) * 0.1, 1.35);
+        pl(t.c, 0, (k - (a.length - 1) / 2) * 0.95, 0.2 + k * 0.03, 1.4, 0, (k - 1) * 0.1, 1.3);
       });
 
       cards.forEach((c, i) => {
